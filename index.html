@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curve Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .control-panel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+        input[type="radio"]:checked + .period-label {
+            background-color: #3b82f6;
+            color: #ffffff;
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+          -webkit-appearance: none; 
+          margin: 0; 
+        }
+        input[type=number] { -moz-appearance: textfield; }
+        .details-arrow { transition: transform 0.2s ease-in-out; }
+        details[open] > summary .details-arrow { transform: rotate(90deg); }
+        /* For sticky header in transposed table */
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+        }
+        #results-head-value th:first-child, #results-head-percent th:first-child,
+        #results-head-value th:nth-child(2), #results-head-percent th:nth-child(2) {
+             background-color: #374151; /* bg-gray-700 */
+        }
+        #results-body-value td:first-child, #results-body-percent td:first-child,
+        #results-body-value td:nth-child(2), #results-body-percent td:nth-child(2) {
+            background-color: #1f2937; /* bg-gray-800 */
+        }
+        #results-body-value tr:hover td:first-child, #results-body-percent tr:hover td:first-child,
+        #results-body-value tr:hover td:nth-child(2), #results-body-percent tr:hover td:nth-child(2) {
+             background-color: #2b3646; /* slightly lighter for hover */
+        }
+
+        .chart-tooltip {
+            transition: opacity 0.2s;
+        }
+         input[type="radio"]:checked + .goal-seek-label {
+            background-color: #3b82f6;
+            color: #ffffff;
+            border-color: #3b82f6;
+        }
+        input:disabled, input[disabled] {
+            cursor: not-allowed;
+            background-color: #4b5563 !important;
+            color: #9ca3af !important;
+        }
+        .fieldset-disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* --- Accessibility Focus Styles --- */
+        :focus-visible {
+            outline: 2px solid #60a5fa; /* light blue outline */
+            outline-offset: 2px;
+            border-radius: 0.375rem;
+        }
+        /* Style labels when their corresponding hidden radio is focused */
+        input[type="radio"]:focus-visible + label {
+            outline: 2px solid #60a5fa;
+            outline-offset: 2px;
+        }
+        /* Remove default outline from elements we are styling manually */
+        input, button, select, summary, a, label {
+            outline: none;
+        }
+        
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+        #file-name-modal[aria-hidden="true"] {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 antialiased">
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white tracking-tight">Curve Generator</h1>
+            <p class="text-gray-400 mt-2">Model financial inputs with customizable curves and historical data.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- CONTROLS -->
+            <div id="controls-container" class="lg:col-span-1 bg-gray-800 p-6 rounded-2xl shadow-lg self-start">
+                <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-3">
+                    <h2 class="text-2xl font-semibold">Controls</h2>
+                    <!-- TIME PERIOD -->
+                    <fieldset class="flex rounded-lg bg-gray-700 p-1" role="radiogroup" aria-labelledby="time-period-label">
+                        <legend id="time-period-label" class="sr-only">Time Period</legend>
+                        <input type="radio" id="period-monthly" name="time-period" value="monthly" class="sr-only" checked>
+                        <label for="period-monthly" class="text-center text-xs font-semibold py-1 px-3 rounded-md cursor-pointer transition-colors period-label">Monthly</label>
+                        <input type="radio" id="period-quarterly" name="time-period" value="quarterly" class="sr-only">
+                        <label for="period-quarterly" class="text-center text-xs font-semibold py-1 px-3 rounded-md cursor-pointer transition-colors period-label">Quarterly</label>
+                        <input type="radio" id="period-annually" name="time-period" value="annually" class="sr-only">
+                        <label for="period-annually" class="text-center text-xs font-semibold py-1 px-3 rounded-md cursor-pointer transition-colors period-label">Annually</label>
+                    </fieldset>
+                </div>
+                
+                <div id="curves-list" class="space-y-4">
+                    <!-- Curve panels will be injected here -->
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-gray-700">
+                    <button id="add-curve-btn" class="w-full text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">
+                        Add New Curve
+                    </button>
+                </div>
+
+                 <div class="mt-6 pt-6 border-t border-gray-700">
+                    <h3 class="text-lg font-semibold mb-3">Save/Load Preset</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="save-preset-btn" class="w-full text-center bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg">
+                            Save Preset
+                        </button>
+                        <button id="load-preset-btn" class="w-full text-center bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg">
+                            Load Preset
+                        </button>
+                         <input type="file" id="preset-file-input" class="hidden" accept=".json">
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-gray-700">
+                    <h3 class="text-lg font-semibold mb-3">Export Data</h3>
+                    <div class="space-y-4">
+                        <div>
+                             <fieldset role="radiogroup" aria-labelledby="export-format-label">
+                                <legend id="export-format-label" class="block text-sm font-medium text-gray-400 mb-2">Export Format</legend>
+                                <div class="flex rounded-lg bg-gray-700 p-1">
+                                    <input type="radio" id="export-value" name="export-format" value="value" class="sr-only" checked>
+                                    <label for="export-value" class="goal-seek-label text-center flex-1 cursor-pointer p-1 rounded-md border border-transparent">Value</label>
+                                    <input type="radio" id="export-percent" name="export-format" value="percent" class="sr-only">
+                                    <label for="export-percent" class="goal-seek-label text-center flex-1 cursor-pointer p-1 rounded-md border border-transparent">Percentage</label>
+                                </div>
+                            </fieldset>
+                        </div>
+                        <button id="export-btn" class="w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">
+                            Export All to CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESULTS & CHARTS -->
+            <div class="lg:col-span-2 space-y-8">
+                 <details class="bg-gray-800 rounded-2xl shadow-lg" open>
+                    <summary class="flex items-center justify-between p-4 cursor-pointer">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-4">
+                           <h2 class="text-xl font-semibold">Value Chart</h2>
+                           <div id="value-chart-selection-info" class="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-0"></div>
+                        </div>
+                        <span class="details-arrow text-gray-500">&#9658;</span>
+                    </summary>
+                     <div class="relative p-6 border-t border-gray-700 h-96 flex items-center justify-center">
+                        <div id="value-chart-container" class="w-full h-full">
+                            <svg id="value-chart-svg" width="100%" height="100%"></svg>
+                        </div>
+                        <div id="value-chart-tooltip" class="chart-tooltip absolute pointer-events-none opacity-0 bg-gray-900/80 backdrop-blur-sm rounded-lg p-3 text-xs text-white shadow-xl"></div>
+                    </div>
+                    <div data-chart-controls class="p-4 border-t border-gray-700 text-sm space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="value-chart-fixed-axis" class="fixed-axis-toggle h-4 w-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500">
+                            <label for="value-chart-fixed-axis">Fixed Y-Axis</label>
+                        </div>
+                        <div id="value-chart-axis-inputs" class="axis-inputs-container grid grid-cols-2 gap-2 hidden">
+                            <input type="number" id="value-chart-min" class="axis-min w-full bg-gray-700 rounded-lg p-2 px-4" placeholder="Min">
+                            <input type="number" id="value-chart-max" class="axis-max w-full bg-gray-700 rounded-lg p-2 px-4" placeholder="Max">
+                        </div>
+                        <div class="pt-2 border-t border-gray-700/50">
+                            <label for="value-chart-label-mode" class="block text-sm font-medium text-gray-400 mb-1">Data Labels</label>
+                            <div class="flex items-center space-x-2">
+                                <select id="value-chart-label-mode" class="label-mode-select flex-grow bg-gray-700 rounded-lg p-2 text-sm">
+                                    <option value="off">Off</option>
+                                    <option value="all">Show All</option>
+                                    <option value="nth">Every...</option>
+                                    <option value="eoq">End of Quarter</option>
+                                    <option value="eohy">Mid-Year</option>
+                                    <option value="eoy">End of Year</option>
+                                </select>
+                                <div id="value-chart-label-nth-container" class="nth-container items-center space-x-2 hidden">
+                                     <input type="number" id="value-chart-label-nth" class="label-nth-input w-20 bg-gray-700 rounded-lg p-2 text-center" value="4" min="1">
+                                     <span class="text-gray-400">periods</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="value-chart-period-label-container" class="items-center space-x-2 pt-2 border-t border-gray-700/50 flex hidden">
+                            <input type="checkbox" id="value-chart-period-labels" class="period-label-toggle h-4 w-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500">
+                            <label for="value-chart-period-labels">Show Period on Labels</label>
+                        </div>
+                    </div>
+                </details>
+
+                 <details class="bg-gray-800 rounded-2xl shadow-lg" open>
+                    <summary class="flex items-center justify-between p-4 cursor-pointer">
+                        <h2 class="text-xl font-semibold">Growth Curve (%) Chart</h2>
+                        <span class="details-arrow text-gray-500">&#9658;</span>
+                    </summary>
+                     <div class="relative p-6 border-t border-gray-700 h-96 flex items-center justify-center">
+                        <div id="percent-chart-container" class="w-full h-full">
+                            <svg id="percent-chart-svg" width="100%" height="100%"></svg>
+                        </div>
+                        <div id="percent-chart-tooltip" class="chart-tooltip absolute pointer-events-none opacity-0 bg-gray-900/80 backdrop-blur-sm rounded-lg p-3 text-xs text-white shadow-xl"></div>
+                    </div>
+                     <div data-chart-controls class="p-4 border-t border-gray-700 text-sm space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="percent-chart-fixed-axis" class="fixed-axis-toggle h-4 w-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500">
+                            <label for="percent-chart-fixed-axis">Fixed Y-Axis</label>
+                        </div>
+                        <div id="percent-chart-axis-inputs" class="axis-inputs-container grid grid-cols-2 gap-2 hidden">
+                            <input type="number" id="percent-chart-min" class="axis-min w-full bg-gray-700 rounded-lg p-2 px-4" placeholder="Min (%)">
+                            <input type="number" id="percent-chart-max" class="axis-max w-full bg-gray-700 rounded-lg p-2 px-4" placeholder="Max (%)">
+                        </div>
+                         <div class="pt-2 border-t border-gray-700/50">
+                            <label for="percent-chart-label-mode" class="block text-sm font-medium text-gray-400 mb-1">Data Labels</label>
+                            <div class="flex items-center space-x-2">
+                                <select id="percent-chart-label-mode" class="label-mode-select flex-grow bg-gray-700 rounded-lg p-2 text-sm">
+                                    <option value="off">Off</option>
+                                    <option value="all">Show All</option>
+                                    <option value="nth">Every...</option>
+                                    <option value="eoq">End of Quarter</option>
+                                    <option value="eohy">Mid-Year</option>
+                                    <option value="eoy">End of Year</option>
+                                </select>
+                                <div id="percent-chart-label-nth-container" class="nth-container items-center space-x-2 hidden">
+                                     <input type="number" id="percent-chart-label-nth" class="label-nth-input w-20 bg-gray-700 rounded-lg p-2 text-center" value="4" min="1">
+                                     <span class="text-gray-400">periods</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="percent-chart-period-label-container" class="items-center space-x-2 pt-2 border-t border-gray-700/50 flex hidden">
+                            <input type="checkbox" id="percent-chart-period-labels" class="period-label-toggle h-4 w-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500">
+                            <label for="percent-chart-period-labels">Show Period on Labels</label>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="bg-gray-800 rounded-2xl shadow-lg" open>
+                    <summary class="flex items-center justify-between p-4 cursor-pointer">
+                        <h2 class="text-xl font-semibold">Generated Data (Value)</h2>
+                        <span class="details-arrow text-gray-500">&#9658;</span>
+                    </summary>
+                    <div class="p-6 border-t border-gray-700">
+                        <div class="max-h-96 overflow-auto rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-400">
+                                <thead id="results-head-value" class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0"></thead>
+                                <tbody id="results-body-value"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
+                
+                <details class="bg-gray-800 rounded-2xl shadow-lg" open>
+                     <summary class="flex items-center justify-between p-4 cursor-pointer">
+                        <h2 class="text-xl font-semibold">Generated Data (% Growth)</h2>
+                        <span class="details-arrow text-gray-500">&#9658;</span>
+                    </summary>
+                    <div class="p-6 border-t border-gray-700">
+                        <div class="max-h-96 overflow-auto rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-400">
+                                <thead id="results-head-percent" class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0"></thead>
+                                <tbody id="results-body-percent"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </main>
+
+        <!-- FILE NAME MODAL -->
+        <div id="file-name-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+            <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm" role="document">
+                <h2 id="modal-title" class="text-lg font-semibold mb-4">Enter File Name</h2>
+                <div>
+                    <label for="file-name-input" class="sr-only">File Name</label>
+                    <input type="text" id="file-name-input" class="w-full bg-gray-700 rounded-lg p-2 px-4" placeholder="e.g. curve_data">
+                </div>
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button id="modal-cancel-btn" class="px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-700 font-semibold">Cancel</button>
+                    <button id="modal-save-btn" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const controlsContainer = document.getElementById('controls-container');
+        const addCurveBtn = document.getElementById('add-curve-btn');
+        const curvesList = document.getElementById('curves-list');
+        const exportBtn = document.getElementById('export-btn');
+        const savePresetBtn = document.getElementById('save-preset-btn');
+        const loadPresetBtn = document.getElementById('load-preset-btn');
+        const presetFileInput = document.getElementById('preset-file-input');
+        
+        const modal = document.getElementById('file-name-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const fileNameInput = document.getElementById('file-name-input');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const modalSaveBtn = document.getElementById('modal-save-btn');
+        
+        let modalAction = null;
+        
+        const percentChartContainer = document.getElementById('percent-chart-container');
+        const percentChartSvg = document.getElementById('percent-chart-svg');
+        const percentChartTooltip = document.getElementById('percent-chart-tooltip');
+
+        const valueChartContainer = document.getElementById('value-chart-container');
+        const valueChartSvg = document.getElementById('value-chart-svg');
+        const valueChartTooltip = document.getElementById('value-chart-tooltip');
+
+        let curveCounter = 0;
+        const curveColors = ['#3b82f6', '#10b981', '#ef4444', '#f97316', '#8b5cf6', '#d946ef'];
+
+        const eyeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        const eyeOffIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye-off"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
+        // --- EVENT LISTENERS ---
+        addCurveBtn.addEventListener('click', () => addCurve(true));
+        exportBtn.addEventListener('click', () => showModal('exportCSV'));
+        savePresetBtn.addEventListener('click', () => showModal('savePreset'));
+        loadPresetBtn.addEventListener('click', () => presetFileInput.click());
+        presetFileInput.addEventListener('change', loadPreset);
+
+        modalCancelBtn.addEventListener('click', hideModal);
+        modalSaveBtn.addEventListener('click', handleModalSave);
+        modal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') hideModal();
+        });
+        
+        controlsContainer.addEventListener('change', (e) => {
+            if (e.target.closest('.goal-seek-toggle') || e.target.closest('.duration-mode-toggle')) {
+                handleSegmentToggles(e.target);
+            }
+            if (e.target.name === 'time-period') {
+                handleTimePeriodChange(e.target.value);
+            }
+             if (e.target.matches('.historical-data-type')) {
+                updateBaseValueUI(e.target.closest('.curve-panel'));
+            }
+            generateAllCurves();
+        });
+
+        controlsContainer.addEventListener('input', (e) => {
+            if (e.target.classList.contains('base-value-input') || e.target.classList.contains('segment-target-value-abs')) {
+                formatNumberInput(e.target);
+            }
+            if (e.target.matches('.historical-data-input')) {
+                 updateBaseValueUI(e.target.closest('.curve-panel'));
+            }
+            if (e.target.matches('.base-month, .base-year, .base-quarter, .end-month, .end-year, .end-quarter')) {
+                updateDateLabel(e.target);
+            }
+            generateAllCurves();
+        });
+        
+        document.body.addEventListener('click', function(event) {
+            if (event.target.classList.contains('copy-btn')) {
+                const button = event.target;
+                const curveId = button.dataset.curveId;
+                const dataType = button.dataset.type;
+                copyCurveData(curveId, dataType, button);
+            }
+        });
+
+        curvesList.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-curve-btn')) {
+                e.preventDefault();
+                e.target.closest('.curve-panel').remove();
+                generateAllCurves();
+            } else if (e.target.closest('.add-segment-btn')) {
+                const segmentsContainer = e.target.closest('.curve-panel').querySelector('.segments-container');
+                addGrowthSegment(segmentsContainer);
+                generateAllCurves();
+            } else if (e.target.closest('.remove-segment-btn')) {
+                e.target.closest('.growth-segment').remove();
+                generateAllCurves();
+            } else if (e.target.closest('.visibility-toggle')) {
+                const toggle = e.target.closest('.visibility-toggle');
+                const panel = e.target.closest('.curve-panel');
+                const currentlyVisible = panel.dataset.visible === 'false' ? false : true;
+                const isVisible = !currentlyVisible;
+                panel.dataset.visible = isVisible;
+                toggle.innerHTML = isVisible ? eyeIcon : eyeOffIcon;
+                toggle.title = isVisible ? 'Hide Curve' : 'Show Curve';
+                generateAllCurves();
+            }
+        });
+
+        document.querySelectorAll('.fixed-axis-toggle').forEach(toggle => {
+            toggle.addEventListener('change', (e) => {
+                const container = e.target.closest('div[data-chart-controls]').querySelector('.axis-inputs-container');
+                container.classList.toggle('hidden', !e.target.checked);
+                generateAllCurves();
+            });
+        });
+
+        document.querySelectorAll('.label-mode-select').forEach(select => {
+            select.addEventListener('change', e => {
+                const container = e.target.closest('[data-chart-controls]');
+                const nthContainer = container.querySelector('.nth-container');
+                if (nthContainer) {
+                    nthContainer.classList.toggle('hidden', e.target.value !== 'nth');
+                    nthContainer.classList.toggle('flex', e.target.value === 'nth');
+                }
+                const periodLabelContainer = container.querySelector('[id*="-period-label-container"]');
+                if (periodLabelContainer) {
+                    periodLabelContainer.classList.toggle('hidden', e.target.value === 'off');
+                    periodLabelContainer.classList.toggle('flex', e.target.value !== 'off');
+                }
+                generateAllCurves();
+            });
+        });
+        
+        document.querySelectorAll('.period-label-toggle').forEach(toggle => {
+            toggle.addEventListener('change', generateAllCurves);
+        });
+
+        document.querySelectorAll('.label-nth-input').forEach(input => {
+            input.addEventListener('input', generateAllCurves);
+        });
+
+        document.querySelectorAll('.axis-min, .axis-max').forEach(input => {
+            input.addEventListener('input', generateAllCurves);
+        });
+
+
+        // --- UI & FORMATTING ---
+        function updateBaseValueUI(panel) {
+            if (!panel) return;
+            const histInput = panel.querySelector('.historical-data-input');
+            const histType = panel.querySelector('.historical-data-type');
+            const baseValueInput = panel.querySelector('.base-value-input');
+            const baseValueLabel = baseValueInput.previousElementSibling;
+
+            if (histInput.value.trim() !== '' && histType.value === 'value') {
+                baseValueInput.disabled = true;
+                baseValueInput.value = '(from historicals)';
+                baseValueLabel.textContent = 'Base Value';
+            } else {
+                baseValueInput.disabled = false;
+                if (baseValueInput.value === '(from historicals)') {
+                    baseValueInput.value = '';
+                }
+                baseValueLabel.textContent = 'Base Value (for % growth)';
+            }
+        }
+
+        function formatNumberInput(input) {
+            if(input.classList.contains('historical-data-input')) return;
+            let value = input.value;
+            let cursorPosition = input.selectionStart;
+            let originalLength = value.length;
+            
+            value = value.replace(/[^\d.]/g, '');
+            const parts = value.split('.');
+            value = parts[0].replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (parts[1] !== undefined ? '.' + parts[1].slice(0, 2) : '');
+
+            if (input.value !== value) {
+                input.value = value;
+                let newLength = value.length;
+                let newCursorPosition = cursorPosition + (newLength - originalLength);
+                input.setSelectionRange(newCursorPosition, newCursorPosition);
+            }
+        }
+        
+        function parseFormattedNumber(value) {
+            return parseFloat(String(value).replace(/,/g, '')) || 0;
+        }
+        
+        function updateDateLabel(inputElement) {
+            const container = inputElement.closest('[data-date-inputs]');
+             const parent = container.parentElement;
+            const label = parent.querySelector('.date-label') || parent.parentElement.querySelector('.date-label');
+            if (!container || !label) return;
+
+            const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+            const yearInput = container.querySelector('.base-year') || container.querySelector('.end-year');
+            let date;
+
+            if (timePeriod === 'monthly') {
+                const monthInput = container.querySelector('[class*="-month"]');
+                const month = parseInt(monthInput.value);
+                const year = parseInt(yearInput.value);
+                date = parseDate(month, year, timePeriod);
+            } else if (timePeriod === 'quarterly') {
+                const quarterInput = container.querySelector('[class*="-quarter"]');
+                const quarter = parseInt(quarterInput.value);
+                const year = parseInt(yearInput.value);
+                date = parseDate(quarter, year, timePeriod);
+            } else { // annually
+                const year = parseInt(yearInput.value);
+                date = parseDate(null, year, timePeriod);
+            }
+
+            if (date) {
+                if (timePeriod === 'monthly') {
+                    label.textContent = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+                } else if (timePeriod === 'quarterly') {
+                    label.textContent = `Q${Math.floor(date.getUTCMonth()/3)+1} ${date.getUTCFullYear()}`;
+                } else { // annually
+                    label.textContent = date.getUTCFullYear();
+                }
+            } else {
+                label.textContent = '';
+            }
+        }
+        
+        function handleSegmentToggles(radio) {
+             const segment = radio.closest('.growth-segment');
+            if (radio.name.includes('goal-seek')) {
+                const pctInput = segment.querySelector('.segment-target-value-pct');
+                const valInput = segment.querySelector('.segment-target-value-abs');
+                pctInput.disabled = radio.value !== 'pct';
+                valInput.disabled = radio.value === 'pct';
+            }
+            if (radio.name.includes('duration-mode')) {
+                const durationContainer = segment.querySelector('.duration-container');
+                const endDateContainer = segment.querySelector('.end-date-container');
+                const cagrContainer = segment.querySelector('.cagr-container');
+                
+                durationContainer.classList.toggle('hidden', radio.value !== 'duration');
+                endDateContainer.classList.toggle('hidden', radio.value !== 'end_date');
+                cagrContainer.classList.toggle('hidden', radio.value !== 'cagr');
+                
+                const goalSeekFieldset = segment.querySelector('.goal-seek-toggle');
+                const targetPctInput = segment.querySelector('.segment-target-value-pct');
+                const targetValInput = segment.querySelector('.segment-target-value-abs');
+                
+                if (radio.value === 'cagr') {
+                    goalSeekFieldset.classList.add('fieldset-disabled');
+                    targetPctInput.disabled = true;
+                    targetValInput.disabled = true;
+                } else {
+                    goalSeekFieldset.classList.remove('fieldset-disabled');
+                    const goalSeekMode = segment.querySelector('input[name^="goal-seek"]:checked').value;
+                    targetPctInput.disabled = goalSeekMode !== 'pct';
+                    targetValInput.disabled = goalSeekMode === 'pct';
+                }
+            }
+        }
+        
+        function handleTimePeriodChange(newPeriod) {
+            document.querySelectorAll('.curve-panel').forEach(panel => {
+                // Base Date Inputs
+                const baseMonthInput = panel.querySelector('.base-month');
+                const baseQuarterInput = panel.querySelector('.base-quarter');
+                if (baseMonthInput) baseMonthInput.classList.toggle('hidden', newPeriod !== 'monthly');
+                if (baseQuarterInput) baseQuarterInput.classList.toggle('hidden', newPeriod !== 'quarterly');
+                updateDateLabel(panel.querySelector('.base-year'));
+
+                // Segment End Date Inputs
+                panel.querySelectorAll('.growth-segment').forEach(seg => {
+                    const endMonthInput = seg.querySelector('.end-month');
+                    const endQuarterInput = seg.querySelector('.end-quarter');
+                    if(endMonthInput) endMonthInput.classList.toggle('hidden', newPeriod !== 'monthly');
+                    if(endQuarterInput) endQuarterInput.classList.toggle('hidden', newPeriod !== 'quarterly');
+                });
+            });
+        }
+
+
+        // --- CURVE MANAGEMENT ---
+        function addCurve(isOpen = false) {
+            curveCounter++;
+            const color = curveColors[(curveCounter - 1) % curveColors.length];
+            const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+            
+            let baseMonth = 1, baseQuarter = 1, baseYear = 25;
+            let segmentsToClone = [];
+
+            const firstCurvePanel = curvesList.querySelector('.curve-panel');
+            if(firstCurvePanel) {
+                const firstMonthInput = firstCurvePanel.querySelector('.base-month');
+                if (firstMonthInput) baseMonth = firstMonthInput.value;
+                const firstQuarterInput = firstCurvePanel.querySelector('.base-quarter');
+                if (firstQuarterInput) baseQuarter = firstQuarterInput.value;
+                const firstYearInput = firstCurvePanel.querySelector('.base-year');
+                if(firstYearInput) baseYear = firstYearInput.value;
+                segmentsToClone = firstCurvePanel.querySelectorAll('.growth-segment');
+            }
+
+            const newCurveHTML = `
+                <details class="curve-panel bg-gray-900/50 rounded-lg" data-curve-id="${curveCounter}" data-color="${color}" data-visible="true" ${isOpen ? 'open' : ''}>
+                    <summary class="flex items-center justify-between p-3 cursor-pointer">
+                        <div class="flex items-center space-x-3">
+                             <button class="visibility-toggle p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white" title="Hide Curve">${eyeIcon}</button>
+                             <span class="details-arrow text-gray-500">&#9658;</span>
+                             <span class="w-4 h-4 rounded-full" style="background-color: ${color};"></span>
+                             <input type="text" class="curve-name-input bg-transparent font-semibold focus:bg-gray-700 rounded px-2" value="Curve ${curveCounter}" onfocus="this.select()">
+                        </div>
+                        <button class="remove-curve-btn text-red-500 hover:text-red-400 font-bold px-2">&times;</button>
+                    </summary>
+                    <div class="p-4 border-t border-gray-700/50 space-y-4">
+                        <!-- Base Period -->
+                        <div class="p-3 bg-gray-800 rounded-lg space-y-2">
+                             <div class="flex justify-between items-baseline">
+                               <label class="block text-sm font-medium text-gray-400">Base/Start Period</label>
+                               <span class="date-label text-xs text-gray-500"></span>
+                           </div>
+                            <div data-date-inputs>
+                               <div class="flex space-x-2">
+                                    <input type="number" class="base-month w-full bg-gray-700 rounded-lg p-2 text-center ${timePeriod !== 'monthly' ? 'hidden' : ''}" placeholder="M" value="${baseMonth}" min="1" max="12">
+                                    <input type="number" class="base-quarter w-full bg-gray-700 rounded-lg p-2 text-center ${timePeriod !== 'quarterly' ? 'hidden' : ''}" placeholder="Q" value="${baseQuarter}" min="1" max="4">
+                                    <input type="number" class="base-year w-full bg-gray-700 rounded-lg p-2 text-center" placeholder="YY" value="${baseYear}" min="0">
+                               </div>
+                            </div>
+                           <div class="mt-2">
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Base Value (for % growth)</label>
+                                <input type="text" class="base-value-input w-full bg-gray-700 rounded-lg p-2 px-4" value="" placeholder="e.g. 1,000,000">
+                           </div>
+                        </div>
+                        
+                        <!-- Historical Data Input -->
+                        <div class="p-3 bg-gray-800 rounded-lg space-y-2">
+                            <label class="block text-sm font-medium text-gray-400">Historical Data (Optional)</label>
+                            <textarea class="historical-data-input w-full bg-gray-700 rounded-lg p-2 px-4 text-xs font-mono" rows="3" placeholder="Paste space-separated data from Excel..."></textarea>
+                            <div class="flex items-center space-x-2">
+                                <label for="historical-data-type-${curveCounter}" class="text-xs font-medium text-gray-500">Data is:</label>
+                                <select id="historical-data-type-${curveCounter}" class="historical-data-type w-full bg-gray-700 rounded-lg p-2 text-sm">
+                                    <option value="value">Absolute Value ($ or #)</option>
+                                    <option value="percent">Growth Rate (%)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="segments-container space-y-3"></div>
+                        
+                        <div class="pt-2"><button class="add-segment-btn w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm">Add Growth Segment</button></div>
+                    </div>
+                </details>
+            `;
+            curvesList.insertAdjacentHTML('beforeend', newCurveHTML);
+            const newPanel = curvesList.lastElementChild;
+            const segmentsContainer = newPanel.querySelector('.segments-container');
+
+            if (segmentsToClone.length > 0) {
+                segmentsToClone.forEach(seg => {
+                    const newSeg = seg.cloneNode(true);
+                    const newId = Date.now() + Math.random();
+                    newSeg.querySelectorAll('input[type="radio"]').forEach(radio => {
+                        const oldIdMatch = radio.id.match(/-(\d+\.?\d*)$/);
+                        if (oldIdMatch && oldIdMatch[1]) {
+                             const oldId = oldIdMatch[1];
+                             radio.id = radio.id.replace(oldId, newId);
+                             radio.name = radio.name.replace(oldId, newId);
+                        }
+                    });
+                     newSeg.querySelectorAll('label').forEach(label => {
+                        if (label.htmlFor) {
+                            const oldIdMatch = label.htmlFor.match(/-(\d+\.?\d*)$/);
+                            if (oldIdMatch && oldIdMatch[1]) {
+                                const oldId = oldIdMatch[1];
+                                label.htmlFor = label.htmlFor.replace(oldId, newId);
+                            }
+                        }
+                    });
+                    segmentsContainer.appendChild(newSeg);
+                });
+            } else {
+                 addGrowthSegment(segmentsContainer);
+            }
+
+            updateDateLabel(newPanel.querySelector('.base-year'));
+        }
+
+        function addGrowthSegment(container) {
+            const segmentId = Date.now() + Math.random();
+            const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+            const newSegmentHTML = `
+                <div class="growth-segment p-3 bg-gray-800 rounded-lg">
+                   <div class="flex items-center justify-between mb-2">
+                        <label class="block text-sm font-medium text-gray-500">Projected Segment</label>
+                        <button class="remove-segment-btn text-red-500 hover:text-red-400 text-xl font-bold self-start">&times;</button>
+                   </div>
+                   <div class="space-y-2">
+                        <!-- Duration Mode Toggle -->
+                        <fieldset class="flex items-center justify-center p-1 rounded-md bg-gray-700 text-xs duration-mode-toggle" role="radiogroup">
+                            <input type="radio" id="dur-${segmentId}" name="duration-mode-${segmentId}" value="duration" class="sr-only" checked>
+                            <label for="dur-${segmentId}" class="goal-seek-label text-center flex-1 cursor-pointer p-1 rounded-md border border-transparent">By Duration</label>
+                            <input type="radio" id="endd-${segmentId}" name="duration-mode-${segmentId}" value="end_date" class="sr-only">
+                            <label for="endd-${segmentId}" class="goal-seek-label text-center flex-1 cursor-pointer p-1 rounded-md border border-transparent">By End Date</label>
+                            <input type="radio" id="cagr-${segmentId}" name="duration-mode-${segmentId}" value="cagr" class="sr-only">
+                            <label for="cagr-${segmentId}" class="goal-seek-label text-center flex-1 cursor-pointer p-1 rounded-md border border-transparent">By CAGR</label>
+                        </fieldset>
+                        
+                        <div class="duration-container">
+                            <div class="flex items-center space-x-2">
+                                <label class="text-sm text-gray-400">For the next</label>
+                                <input type="number" class="segment-duration w-20 bg-gray-700 rounded-lg p-2 text-center" value="12">
+                                <span class="period-label-text text-sm text-gray-400">months</span>
+                            </div>
+                        </div>
+                        <div class="end-date-container hidden" data-date-inputs>
+                            <div class="flex space-x-2">
+                                <input type="number" class="end-month w-full bg-gray-700 rounded-lg p-2 text-center ${timePeriod !== 'monthly' ? 'hidden' : ''}" placeholder="M" value="12" min="1" max="12">
+                                <input type="number" class="end-quarter w-full bg-gray-700 rounded-lg p-2 text-center ${timePeriod !== 'quarterly' ? 'hidden' : ''}" placeholder="Q" value="4" min="1" max="4">
+                                <input type="number" class="end-year w-full bg-gray-700 rounded-lg p-2 text-center" placeholder="YY" value="26" min="0">
+                            </div>
+                        </div>
+                         <div class="cagr-container hidden">
+                            <div class="flex items-center space-x-2 text-sm">
+                                <label class="text-gray-400">For</label>
+                                <input type="number" class="segment-cagr-duration w-20 bg-gray-700 rounded-lg p-2 text-center" value="5">
+                                <span class="period-label-text text-gray-400">years</span>
+                                <label class="text-gray-400">at</label>
+                                <div class="relative">
+                                    <input type="number" class="segment-cagr-value w-20 bg-gray-700 rounded-lg p-2 text-center" value="10">
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                                </div>
+                                <label class="text-gray-400">CAGR</label>
+                            </div>
+                        </div>
+
+                        <!-- Goal Seek Toggle -->
+                        <fieldset class="flex items-center justify-center p-1 rounded-md bg-gray-700 text-xs goal-seek-toggle" role="radiogroup">
+                            <input type="radio" id="pct-${segmentId}" name="goal-seek-${segmentId}" value="pct" class="sr-only" checked>
+                            <label for="pct-${segmentId}" class="goal-seek-label text-center flex-1 cursor-pointer p-1 rounded-md border border-transparent">Total Growth %</label>
+                            <input type="radio" id="val-${segmentId}" name="goal-seek-${segmentId}" value="val" class="sr-only">
+                            <label for="val-${segmentId}" class="goal-seek-label text-center flex-1 cursor-pointer p-1 rounded-md border border-transparent">End Value</label>
+                        </fieldset>
+
+                        <div>
+                            <div class="relative">
+                                <input type="number" class="segment-target-value-pct w-full bg-gray-700 rounded-lg p-2 pl-4" value="10"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                            </div>
+                            <div class="relative mt-1">
+                                <input type="text" class="segment-target-value-abs w-full bg-gray-700 rounded-lg p-2 px-4" value="" disabled>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-500">Ramp Type</label>
+                            <select class="ramp-type-select w-full bg-gray-700 rounded-lg p-2.5 text-sm">
+                                <option value="linear">Linear</option>
+                                <option value="constant">Constant Rate</option>
+                                <option value="ease-in">Ease-In (Convex)</option>
+                                <option value="ease-out">Ease-Out (Concave)</option>
+                                <option value="ease-out-cubic">Front-Loaded (Cubic)</option>
+                                <option value="s-curve">S-Curve</option>
+                            </select>
+                        </div>
+                   </div>
+                   <div class="mt-3 pt-3 border-t border-gray-700/50 text-right">
+                        <span class="text-xs text-gray-500">Ending Value:</span>
+                        <span class="segment-ending-value text-sm font-semibold text-gray-300"></span>
+                   </div>
+                </div>`;
+            container.insertAdjacentHTML('beforeend', newSegmentHTML);
+            const newSegment = container.lastElementChild;
+            
+            let periodText = 'months';
+            if (timePeriod === 'quarterly') periodText = 'quarters';
+            if (timePeriod === 'annually') periodText = 'years';
+            newSegment.querySelectorAll('.period-label-text').forEach(el => el.textContent = periodText);
+
+            handleSegmentToggles(newSegment.querySelector('input[type="radio"]:checked'));
+        }
+
+        // --- CORE LOGIC ---
+        function parseDate(periodValue, yearValue, periodType) {
+            if (isNaN(yearValue)) return null;
+            const fullYear = yearValue < 100 ? 2000 + yearValue : yearValue;
+            if (periodType === 'monthly') {
+                if (isNaN(periodValue) || periodValue < 1 || periodValue > 12) return null;
+                return new Date(Date.UTC(fullYear, periodValue - 1, 1));
+            } else if (periodType === 'quarterly') {
+                if (isNaN(periodValue) || periodValue < 1 || periodValue > 4) return null;
+                const month = (periodValue - 1) * 3;
+                return new Date(Date.UTC(fullYear, month, 1));
+            } else { // annually
+                return new Date(Date.UTC(fullYear, 0, 1));
+            }
+        }
+        
+        function getSegmentDuration(segment, startDate, timePeriod) {
+            const durationMode = segment.querySelector('input[name^="duration-mode"]:checked').value;
+            if (durationMode === 'end_date') {
+                let endDate;
+                const container = segment.querySelector('.end-date-container');
+                if (!container) return 0;
+
+                const endYearEl = container.querySelector('.end-year');
+                if (!endYearEl || !endYearEl.value) return 0;
+                const endYear = parseInt(endYearEl.value);
+
+                if (timePeriod === 'monthly') {
+                    const endMonthEl = container.querySelector('.end-month');
+                    if (!endMonthEl || !endMonthEl.value) return 0;
+                    endDate = parseDate(parseInt(endMonthEl.value), endYear, timePeriod);
+                } else if (timePeriod === 'quarterly') {
+                    const endQuarterEl = container.querySelector('.end-quarter');
+                    if (!endQuarterEl || !endQuarterEl.value) return 0;
+                    endDate = parseDate(parseInt(endQuarterEl.value), endYear, timePeriod);
+                } else { // annually
+                    endDate = parseDate(null, endYear, timePeriod);
+                }
+                
+                if (endDate && startDate && endDate > startDate) {
+                    let duration;
+                    if (timePeriod === 'monthly') {
+                        const yearDiff = endDate.getUTCFullYear() - startDate.getUTCFullYear();
+                        const monthDiff = endDate.getUTCMonth() - startDate.getUTCMonth();
+                        duration = yearDiff * 12 + monthDiff;
+                    } else if (timePeriod === 'quarterly') {
+                        const startTotalQuarters = startDate.getUTCFullYear() * 4 + Math.floor(startDate.getUTCMonth() / 3);
+                        const endTotalQuarters = endDate.getUTCFullYear() * 4 + Math.floor(endDate.getUTCMonth() / 3);
+                        duration = endTotalQuarters - startTotalQuarters;
+                    } else { // annually
+                        duration = endDate.getUTCFullYear() - startDate.getUTCFullYear();
+                    }
+                    segment.querySelector('.segment-duration').value = duration;
+                    return duration;
+                }
+                return 0;
+            } else {
+                 return parseInt(segment.querySelector('.segment-duration').value) || 0;
+            }
+        }
+
+        let masterPeriodsCache = [];
+        let allCurvesDataCache = [];
+
+        function generateAllCurves() {
+            const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+            let periodText = 'months';
+            if (timePeriod === 'quarterly') periodText = 'quarters';
+            if (timePeriod === 'annually') periodText = 'years';
+            document.querySelectorAll('.period-label-text').forEach(el => el.textContent = periodText);
+
+            const curvePanels = Array.from(curvesList.querySelectorAll('.curve-panel'));
+            let allCurvesData = [];
+            let globalMinDate = null, globalMaxDate = null;
+
+            curvePanels.forEach(panel => {
+                const baseYearEl = panel.querySelector('.base-year');
+                let baseDate;
+
+                if (timePeriod === 'monthly') {
+                    const baseMonthEl = panel.querySelector('.base-month');
+                    baseDate = parseDate(parseInt(baseMonthEl.value), parseInt(baseYearEl.value), timePeriod);
+                } else if (timePeriod === 'quarterly') {
+                    const baseQuarterEl = panel.querySelector('.base-quarter');
+                    baseDate = parseDate(parseInt(baseQuarterEl.value), parseInt(baseYearEl.value), timePeriod);
+                } else { // annually
+                    baseDate = parseDate(null, parseInt(baseYearEl.value), timePeriod);
+                }
+                
+                if (!baseDate) return;
+                 if (!globalMinDate || baseDate < globalMinDate) globalMinDate = baseDate;
+
+                const baseValue = parseFormattedNumber(panel.querySelector('.base-value-input').value);
+                const historicalDataRaw = panel.querySelector('.historical-data-input').value.trim();
+                
+                let points = [];
+                let currentDate = new Date(baseDate.getTime());
+                let currentValue = baseValue;
+                
+                // --- Process Historical Data or Base Value ---
+                if (historicalDataRaw) {
+                    const historicalDataType = panel.querySelector('.historical-data-type').value;
+                    const historicalValues = historicalDataRaw.split(/\s+/).filter(v => v !== '').map(v => parseFloat(v.replace(/[$,%]/g, '')) || 0);
+
+                    if (historicalDataType === 'value') {
+                        let lastHistValue = 0;
+                        historicalValues.forEach((val, i) => {
+                            let percentGrowth = (i > 0 && lastHistValue > 0) ? ((val / lastHistValue) - 1) * 100 : 0;
+                            points.push({ date: new Date(currentDate.getTime()), value: percentGrowth, compoundedValue: val, isActual: true });
+                            lastHistValue = val;
+                            if (timePeriod === 'monthly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+                            else if (timePeriod === 'quarterly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 3);
+                            else currentDate.setUTCFullYear(currentDate.getUTCFullYear() + 1);
+                        });
+                    } else { // 'percent'
+                        points.push({ date: new Date(currentDate.getTime()), value: 0, compoundedValue: currentValue, isActual: true });
+                        historicalValues.forEach(p => {
+                            if (timePeriod === 'monthly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+                            else if (timePeriod === 'quarterly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 3);
+                            else currentDate.setUTCFullYear(currentDate.getUTCFullYear() + 1);
+                            currentValue *= (1 + p / 100);
+                            points.push({ date: new Date(currentDate.getTime()), value: p, compoundedValue: currentValue, isActual: true });
+                        });
+                        if (timePeriod === 'monthly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+                        else if (timePeriod === 'quarterly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 3);
+                        else currentDate.setUTCFullYear(currentDate.getUTCFullYear() + 1);
+                    }
+                    if (points.length > 0) {
+                        const lastPoint = points[points.length - 1];
+                        currentValue = lastPoint.compoundedValue;
+                    }
+                } else {
+                    points.push({ date: new Date(currentDate.getTime()), value: 0, compoundedValue: currentValue, isActual: false });
+                    if (timePeriod === 'monthly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+                    else if (timePeriod === 'quarterly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 3);
+                    else currentDate.setUTCFullYear(currentDate.getUTCFullYear() + 1);
+                }
+
+                // --- Process Projected Segments ---
+                panel.querySelectorAll('.growth-segment').forEach((segment) => {
+                    const durationMode = segment.querySelector('input[name^="duration-mode"]:checked').value;
+                    let duration;
+
+                    if (durationMode === 'cagr') {
+                        duration = parseInt(segment.querySelector('.segment-cagr-duration').value) || 0;
+                        segment.querySelector('.segment-duration').value = duration;
+                    } else {
+                        duration = getSegmentDuration(segment, currentDate, timePeriod);
+                    }
+
+                    if (duration <= 0) return;
+
+                    const rampType = segment.querySelector('.ramp-type-select').value;
+                    const goalSeekMode = segment.querySelector('input[name^="goal-seek"]:checked').value;
+                    const pctInput = segment.querySelector('.segment-target-value-pct');
+                    const valInput = segment.querySelector('.segment-target-value-abs');
+
+                    const segmentStartValue = currentValue;
+                    let endValue;
+
+                    if (durationMode === 'cagr') {
+                        const cagr = parseFloat(segment.querySelector('.segment-cagr-value').value) / 100 || 0;
+                        let years = duration;
+                        if (timePeriod === 'monthly') years = duration / 12;
+                        if (timePeriod === 'quarterly') years = duration / 4;
+                        endValue = segmentStartValue * Math.pow(1 + cagr, years);
+
+                        if (segmentStartValue > 0) {
+                            pctInput.value = ((endValue / segmentStartValue - 1) * 100).toFixed(2);
+                        } else {
+                            pctInput.value = '0.00';
+                        }
+                        valInput.value = endValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    } else if (goalSeekMode === 'val') {
+                        endValue = parseFormattedNumber(valInput.value);
+                        if (segmentStartValue > 0) {
+                            const totalGrowthPct = (endValue / segmentStartValue - 1) * 100;
+                            pctInput.value = isNaN(totalGrowthPct) ? '0.00' : totalGrowthPct.toFixed(2);
+                        } else {
+                            pctInput.value = '0.00';
+                        }
+                    } else { // 'pct'
+                        const totalGrowthPct = parseFloat(pctInput.value) || 0;
+                        endValue = segmentStartValue * (1 + totalGrowthPct / 100);
+                         valInput.value = isNaN(endValue) ? '' : endValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+
+                    if (rampType === 'constant') {
+                        const periodicRate = (endValue / segmentStartValue) > 0 ? Math.pow(endValue / segmentStartValue, 1 / duration) - 1 : 0;
+                        const percent = periodicRate * 100;
+                        
+                        for(let i = 1; i <= duration; i++) {
+                            currentValue *= (1 + periodicRate);
+                            points.push({date: new Date(currentDate.getTime()), value: percent, compoundedValue: currentValue, isActual: false});
+                            if (timePeriod === 'monthly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+                            else if (timePeriod === 'quarterly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 3);
+                            else currentDate.setUTCFullYear(currentDate.getUTCFullYear() + 1);
+                        }
+                    } else {
+                        let previousValue = segmentStartValue;
+                        
+                        for(let i = 1; i <= duration; i++) {
+                            const t = i / duration;
+                            let rampValue;
+                            switch (rampType) {
+                                case 'ease-in': rampValue = t*t; break;
+                                case 'ease-out': rampValue = 1 - Math.pow(1-t, 2); break;
+                                case 'ease-out-cubic': rampValue = 1 - Math.pow(1 - t, 3); break;
+                                case 's-curve': rampValue = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2; break;
+                                default: rampValue = t; // linear
+                            }
+                            
+                            currentValue = segmentStartValue + (endValue - segmentStartValue) * rampValue;
+                            const percent = previousValue > 0 ? (currentValue / previousValue - 1) * 100 : 0;
+                            
+                            points.push({date: new Date(currentDate.getTime()), value: percent, compoundedValue: currentValue, isActual: false});
+                            
+                            previousValue = currentValue;
+
+                            if (timePeriod === 'monthly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+                            else if (timePeriod === 'quarterly') currentDate.setUTCMonth(currentDate.getUTCMonth() + 3);
+                            else currentDate.setUTCFullYear(currentDate.getUTCFullYear() + 1);
+                        }
+                    }
+                    segment.querySelector('.segment-ending-value').textContent = isNaN(currentValue) ? 'N/A' : currentValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                });
+
+                if (points.length > 0) {
+                    const lastDate = points[points.length-1].date;
+                    if (!globalMaxDate || lastDate > globalMaxDate) globalMaxDate = lastDate;
+                }
+
+                let cagr = 0;
+                if (points.length > 1) {
+                    const startPoint = points[0]; const endPoint = points[points.length - 1];
+                    const years = (endPoint.date.getTime() - startPoint.date.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+                    if (years > 0 && startPoint.compoundedValue > 0 && endPoint.compoundedValue > 0) {
+                        cagr = (Math.pow(endPoint.compoundedValue / startPoint.compoundedValue, 1 / years) - 1) * 100;
+                    }
+                }
+
+                allCurvesData.push({
+                    id: panel.dataset.curveId, name: panel.querySelector('.curve-name-input').value,
+                    color: panel.dataset.color, points: points, cagr: cagr,
+                    isVisible: panel.dataset.visible !== 'false'
+                });
+            });
+            
+            allCurvesDataCache = allCurvesData;
+            if (allCurvesData.length === 0 || !globalMinDate || !globalMaxDate) {
+                masterPeriodsCache = []; renderTables([], [], 'monthly');
+                drawChart(percentChartSvg, percentChartTooltip, [], 'value', '%', { toggleId: 'percent-chart-fixed-axis', minId: 'percent-chart-min', maxId: 'percent-chart-max', showLabelsSelectId: 'percent-chart-label-mode', labelNthInputId: 'percent-chart-label-nth', periodLabelToggleId: 'percent-chart-period-labels' });
+                drawChart(valueChartSvg, valueChartTooltip, [], 'compoundedValue', '', { toggleId: 'value-chart-fixed-axis', minId: 'value-chart-min', maxId: 'value-chart-max', showLabelsSelectId: 'value-chart-label-mode', labelNthInputId: 'value-chart-label-nth', periodLabelToggleId: 'value-chart-period-labels' });
+                return;
+            }
+
+            if (timePeriod === 'monthly') masterPeriodsCache = getMonthsBetween(globalMinDate, globalMaxDate, true);
+            else if (timePeriod === 'quarterly') masterPeriodsCache = getQuartersBetween(globalMinDate, globalMaxDate, true);
+            else masterPeriodsCache = getYearsBetween(globalMinDate, globalMaxDate, true);
+
+            renderTables(masterPeriodsCache, allCurvesDataCache, timePeriod);
+
+            const visibleCurves = allCurvesDataCache.filter(c => c.isVisible);
+
+            const percentChartData = visibleCurves.map(curve => ({
+                ...curve,
+                points: curve.points.slice(1) 
+            }));
+
+            drawChart(percentChartSvg, percentChartTooltip, percentChartData, 'value', '%', { toggleId: 'percent-chart-fixed-axis', minId: 'percent-chart-min', maxId: 'percent-chart-max', showLabelsSelectId: 'percent-chart-label-mode', labelNthInputId: 'percent-chart-label-nth', periodLabelToggleId: 'percent-chart-period-labels' });
+            drawChart(valueChartSvg, valueChartTooltip, visibleCurves, 'compoundedValue', '', { toggleId: 'value-chart-fixed-axis', minId: 'value-chart-min', maxId: 'value-chart-max', showLabelsSelectId: 'value-chart-label-mode', labelNthInputId: 'value-chart-label-nth', periodLabelToggleId: 'value-chart-period-labels' });
+        }
+        
+        function findPointForPeriod(points, period, timePeriod) {
+            return points.find(p => {
+                const pDate = p.date;
+                const periodDate = period.date;
+                if (timePeriod === 'monthly') {
+                    return pDate.getUTCFullYear() === periodDate.getUTCFullYear() && pDate.getUTCMonth() === periodDate.getUTCMonth();
+                } else if (timePeriod === 'quarterly') {
+                    return pDate.getUTCFullYear() === period.year && Math.floor(pDate.getUTCMonth()/3)+1 === period.quarter;
+                } else { // annually
+                    return pDate.getUTCFullYear() === period.year;
+                }
+            });
+        }
+
+        function getMonthsBetween(startDate, endDate, mapToObject = false) {
+            const dates = [];
+            let currentDate = new Date(startDate.getTime());
+            while (currentDate.getTime() <= endDate.getTime() + 1) { // Epsilon for safety
+                dates.push(new Date(currentDate.getTime()));
+                currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+            }
+            return mapToObject ? dates.map(d => ({date: d, year: d.getUTCFullYear() })) : dates;
+        }
+
+        function getQuartersBetween(startDate, endDate, mapToObject = false) {
+            const quarters = [];
+            let currentDate = new Date(startDate.getTime());
+            while (currentDate.getTime() <= endDate.getTime() + 1) {
+                const currentYear = currentDate.getUTCFullYear();
+                const currentQuarter = Math.floor(currentDate.getUTCMonth() / 3) + 1;
+                quarters.push({ date: new Date(currentDate.getTime()), year: currentYear, quarter: currentQuarter });
+                currentDate.setUTCMonth(currentDate.getUTCMonth() + 3);
+            }
+            return mapToObject ? quarters : quarters.map(q => q.date);
+        }
+
+        function getYearsBetween(startDate, endDate, mapToObject = false) {
+            const years = [];
+            let currentDate = new Date(startDate.getTime());
+             while (currentDate.getUTCFullYear() <= endDate.getUTCFullYear()) {
+                const currentYear = currentDate.getUTCFullYear();
+                years.push({ date: new Date(currentDate.getTime()), year: currentYear });
+                currentDate.setUTCFullYear(currentDate.getUTCFullYear() + 1);
+            }
+            return mapToObject ? years : years.map(y => y.date);
+        }
+        
+        function exportToCSV(filename) {
+            const exportFormat = document.querySelector('input[name="export-format"]:checked').value;
+            const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+            if (masterPeriodsCache.length === 0) {
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            const headers = ['Metric', ...masterPeriodsCache.map(period => {
+                if (timePeriod === 'monthly') return period.date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', year: '2-digit' });
+                if (timePeriod === 'quarterly') return `Q${period.quarter} '${String(period.year).slice(-2)}`;
+                return `FY'${String(period.year).slice(-2)}`;
+            })];
+            csvContent += headers.join(',') + '\r\n';
+
+            allCurvesDataCache.forEach(curve => {
+                const row = [curve.name];
+                masterPeriodsCache.forEach(period => {
+                    const point = findPointForPeriod(curve.points, period, timePeriod);
+                    if (point) {
+                        const suffix = point.isActual ? '(A)' : '(P)';
+                        if (exportFormat === 'value') {
+                             row.push(`"${point.compoundedValue.toFixed(2)} ${suffix}"`);
+                        } else { // percent
+                             row.push(`"${(point.value / 100).toFixed(6)} ${suffix}"`);
+                        }
+                    } else {
+                        row.push('');
+                    }
+                });
+                csvContent += row.join(',') + '\r\n';
+            });
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `${filename}.csv`);
+            document.body.appendChild(link); 
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function copyCurveData(curveId, dataType, button) {
+            const curve = allCurvesDataCache.find(c => c.id == curveId);
+            if (!curve) return;
+
+            const pointsToCopy = curve.points.filter(p => !p.isActual);
+            
+            if (!curve.points.some(p => p.isActual) && pointsToCopy.length > 0) {
+                pointsToCopy.shift();
+            }
+
+            if (pointsToCopy.length === 0) {
+                button.textContent = 'No Forecast';
+                setTimeout(() => { button.textContent = 'Copy Forecast'; }, 2000);
+                return;
+            }
+
+            const dataToCopy = pointsToCopy.map(point => {
+                if (dataType === 'compoundedValue') {
+                    return point.compoundedValue.toFixed(6);
+                } else { // 'value' for percentage
+                    return (point.value / 100).toFixed(6);
+                }
+            }).join('\t');
+
+            const textArea = document.createElement("textarea");
+            textArea.value = dataToCopy;
+            textArea.style.position = "fixed"; // prevent scrolling to bottom
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                button.textContent = 'Copied!';
+                setTimeout(() => { button.textContent = 'Copy Forecast'; }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function showModal(action) {
+            modalAction = action;
+            if (action === 'exportCSV') {
+                modalTitle.textContent = 'Enter CSV File Name';
+                fileNameInput.value = 'curve_forecast_data';
+            } else if (action === 'savePreset') {
+                modalTitle.textContent = 'Enter Preset File Name';
+                fileNameInput.value = 'curve_preset';
+            }
+            modal.setAttribute('aria-hidden', 'false');
+            fileNameInput.focus();
+        }
+
+        function hideModal() {
+            modal.setAttribute('aria-hidden', 'true');
+            modalAction = null;
+        }
+
+        function handleModalSave() {
+            const filename = fileNameInput.value || 'download';
+            if (modalAction === 'exportCSV') {
+                exportToCSV(filename);
+            } else if (modalAction === 'savePreset') {
+                savePreset(filename);
+            }
+            hideModal();
+        }
+
+        function savePreset(filename) {
+            const preset = {
+                timePeriod: document.querySelector('input[name="time-period"]:checked').value,
+                curves: []
+            };
+
+            document.querySelectorAll('.curve-panel').forEach(panel => {
+                const curveData = {
+                    name: panel.querySelector('.curve-name-input').value,
+                    baseMonth: panel.querySelector('.base-month').value,
+                    baseQuarter: panel.querySelector('.base-quarter').value,
+                    baseYear: panel.querySelector('.base-year').value,
+                    baseValue: panel.querySelector('.base-value-input').value,
+                    historicalData: panel.querySelector('.historical-data-input').value,
+                    historicalDataType: panel.querySelector('.historical-data-type').value,
+                    segments: []
+                };
+
+                panel.querySelectorAll('.growth-segment').forEach(seg => {
+                    const segmentData = {
+                        durationMode: seg.querySelector('input[name^="duration-mode"]:checked').value,
+                        duration: seg.querySelector('.segment-duration').value,
+                        endMonth: seg.querySelector('.end-month').value,
+                        endQuarter: seg.querySelector('.end-quarter').value,
+                        endYear: seg.querySelector('.end-year').value,
+                        cagrDuration: seg.querySelector('.segment-cagr-duration').value,
+                        cagrValue: seg.querySelector('.segment-cagr-value').value,
+                        goalSeekMode: seg.querySelector('input[name^="goal-seek"]:checked').value,
+                        targetPct: seg.querySelector('.segment-target-value-pct').value,
+                        targetVal: seg.querySelector('.segment-target-value-abs').value,
+                        rampType: seg.querySelector('.ramp-type-select').value
+                    };
+                    curveData.segments.push(segmentData);
+                });
+                preset.curves.push(curveData);
+            });
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(preset, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `${filename}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+        
+        function loadPreset(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const preset = JSON.parse(e.target.result);
+                    buildUIFromPreset(preset);
+                } catch (error) {
+                    console.error("Error parsing preset file:", error);
+                    alert("Invalid preset file format.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset file input
+        }
+
+        function buildUIFromPreset(preset) {
+            curvesList.innerHTML = '';
+            curveCounter = 0;
+            document.querySelector(`input[name="time-period"][value="${preset.timePeriod}"]`).checked = true;
+            handleTimePeriodChange(preset.timePeriod);
+
+            preset.curves.forEach((curveData, index) => {
+                addCurve(index === 0);
+                const newPanel = curvesList.lastElementChild;
+                
+                newPanel.querySelector('.curve-name-input').value = curveData.name;
+                newPanel.querySelector('.base-month').value = curveData.baseMonth;
+                newPanel.querySelector('.base-quarter').value = curveData.baseQuarter;
+                newPanel.querySelector('.base-year').value = curveData.baseYear;
+                newPanel.querySelector('.base-value-input').value = curveData.baseValue;
+                if(curveData.historicalData) newPanel.querySelector('.historical-data-input').value = curveData.historicalData;
+                if(curveData.historicalDataType) newPanel.querySelector('.historical-data-type').value = curveData.historicalDataType;
+                
+                updateBaseValueUI(newPanel);
+
+                const segmentsContainer = newPanel.querySelector('.segments-container');
+                segmentsContainer.innerHTML = ''; 
+
+                curveData.segments.forEach(segmentData => {
+                    addGrowthSegment(segmentsContainer);
+                    const newSegment = segmentsContainer.lastElementChild;
+                    
+                    const durationRadio = newSegment.querySelector(`input[name^="duration-mode"][value="${segmentData.durationMode}"]`);
+                    if(durationRadio) durationRadio.checked = true;
+                    newSegment.querySelector('.segment-duration').value = segmentData.duration;
+                    newSegment.querySelector('.end-month').value = segmentData.endMonth;
+                    newSegment.querySelector('.end-quarter').value = segmentData.endQuarter;
+                    newSegment.querySelector('.end-year').value = segmentData.endYear;
+                    if(segmentData.cagrDuration) newSegment.querySelector('.segment-cagr-duration').value = segmentData.cagrDuration;
+                    if(segmentData.cagrValue) newSegment.querySelector('.segment-cagr-value').value = segmentData.cagrValue;
+
+                    const goalSeekRadio = newSegment.querySelector(`input[name^="goal-seek"][value="${segmentData.goalSeekMode}"]`);
+                    if(goalSeekRadio) goalSeekRadio.checked = true;
+                    newSegment.querySelector('.segment-target-value-pct').value = segmentData.targetPct;
+                    newSegment.querySelector('.segment-target-value-abs').value = segmentData.targetVal;
+                    newSegment.querySelector('.ramp-type-select').value = segmentData.rampType;
+                    
+                    handleSegmentToggles(durationRadio);
+                    handleSegmentToggles(goalSeekRadio);
+                });
+            });
+            generateAllCurves();
+        }
+
+        // --- RENDER FUNCTIONS ---
+        function renderTables(masterPeriods, curves, timePeriod) {
+            const resultsHeadValue = document.getElementById('results-head-value');
+            const resultsBodyValue = document.getElementById('results-body-value');
+            const resultsHeadPercent = document.getElementById('results-head-percent');
+            const resultsBodyPercent = document.getElementById('results-body-percent');
+
+            let headHTML = '<tr><th scope="col" class="sticky-col px-6 py-3 whitespace-nowrap">Metric</th><th scope="col" class="px-2 py-3"></th>';
+            masterPeriods.forEach(period => {
+                let dateLabel;
+                if (timePeriod === 'monthly') dateLabel = period.date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', year: '2-digit' });
+                else if (timePeriod === 'quarterly') dateLabel = `Q${period.quarter} '${String(period.year).slice(-2)}`;
+                else dateLabel = `FY'${String(period.year).slice(-2)}`;
+                headHTML += `<th scope="col" class="px-6 py-3 text-right">${dateLabel}</th>`;
+            });
+            headHTML += '</tr>';
+            resultsHeadValue.innerHTML = headHTML;
+            resultsHeadPercent.innerHTML = headHTML;
+
+            let bodyValueHTML = '';
+            let bodyPercentHTML = '';
+
+            curves.forEach((curve) => {
+                 const rowClass = curve.isVisible ? '' : 'opacity-40';
+                 bodyValueHTML += `<tr class="border-b border-gray-700 hover:bg-gray-700/50 ${rowClass}">
+                                <td class="sticky-col px-6 py-4 font-medium text-gray-300 whitespace-nowrap" style="color: ${curve.color};">${curve.name}</td>
+                                <td class="px-2 py-4"><button class="copy-btn bg-gray-600 hover:bg-gray-500 text-xs font-semibold py-1 px-2 rounded" data-curve-id="${curve.id}" data-type="compoundedValue">Copy Forecast</button></td>`;
+                masterPeriods.forEach(period => {
+                    const point = findPointForPeriod(curve.points, period, timePeriod);
+                    let cellContent = '-';
+                    let cellClass = '';
+                    if(point) {
+                        const suffix = point.isActual ? ' (A)' : ' (P)';
+                        cellContent = point.compoundedValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + suffix;
+                        if(point.isActual) cellClass = 'bg-blue-900/30 font-semibold';
+                    }
+                    bodyValueHTML += `<td class="px-6 py-4 text-right font-mono ${cellClass}">${cellContent}</td>`;
+                });
+                bodyValueHTML += `</tr>`;
+
+                bodyPercentHTML += `<tr class="border-b border-gray-700 hover:bg-gray-700/50 ${rowClass}">
+                                <td class="sticky-col px-6 py-4 font-medium text-gray-300 whitespace-nowrap" style="color: ${curve.color};">${curve.name}</td>
+                                 <td class="px-2 py-4"><button class="copy-btn bg-gray-600 hover:bg-gray-500 text-xs font-semibold py-1 px-2 rounded" data-curve-id="${curve.id}" data-type="value">Copy Forecast</button></td>`;
+                masterPeriods.forEach((period, index) => {
+                    const point = findPointForPeriod(curve.points, period, timePeriod);
+                    let displayValue = '-';
+                    let cellClass = '';
+                    if(point) {
+                        const isFirstPointOfCurve = curve.points.length > 0 && curve.points[0].date.getTime() === point.date.getTime();
+                        const suffix = point.isActual ? ' (A)' : ' (P)';
+                        displayValue = isFirstPointOfCurve ? `-` : `${point.value.toFixed(2)}%${suffix}`;
+                        if(point.isActual) cellClass = 'bg-blue-900/30 font-semibold';
+                    }
+                    bodyPercentHTML += `<td class="px-6 py-4 text-right ${cellClass}">${displayValue}</td>`;
+                });
+                bodyPercentHTML += `</tr>`;
+            });
+            resultsBodyValue.innerHTML = bodyValueHTML;
+            resultsBodyPercent.innerHTML = bodyPercentHTML;
+        }
+        
+        function formatPeriodLabelForChart(point, timePeriod) {
+            const date = point.date;
+            const year = date.getUTCFullYear().toString().slice(-2);
+            const type = point.isActual ? 'A' : 'P';
+
+            if (timePeriod === 'annually') {
+                return `${date.getUTCFullYear()}${type}`;
+            }
+            if (timePeriod === 'quarterly') {
+                const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+                return `Q${quarter} ${year}`;
+            }
+            // monthly
+            const month = date.getUTCMonth() + 1;
+            return `${month}/${year}`;
+        }
+
+        function drawChart(svgEl, tooltipEl, visibleCurvesData, dataKey, yAxisSuffix = '', chartControls) {
+            svgEl.innerHTML = '';
+            const margin = { top: 20, right: 20, bottom: 40, left: 70 };
+            const availableWidth = svgEl.clientWidth - margin.left - margin.right;
+
+            // --- PRE-CALCULATE LEGEND LAYOUT ---
+            const legendItemsLayout = [];
+            const legendRowHeight = 20; // height of one row in the legend including padding
+            const legendItemPadding = 25;
+            let requiredLegendHeight = 0;
+
+            if (visibleCurvesData.length > 0 && availableWidth > 0) {
+                let currentX = 0;
+                let currentY = 0;
+                
+                visibleCurvesData.forEach(curve => {
+                    let labelText = curve.name;
+                    if (dataKey === 'compoundedValue' && curve.cagr) {
+                        labelText += ` (CAGR: ${curve.cagr.toFixed(2)}%)`;
+                    }
+                    
+                    const tempText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    tempText.setAttribute('font-size', '12');
+                    tempText.setAttribute('y', '-1000'); // Position off-screen
+                    tempText.textContent = labelText;
+                    svgEl.appendChild(tempText);
+                    const textWidth = tempText.getComputedTextLength();
+                    svgEl.removeChild(tempText);
+
+                    const itemWidth = 18 + textWidth; // rect(12) + padding(6) + text
+
+                    if (currentX > 0 && currentX + itemWidth > availableWidth) {
+                        currentX = 0;
+                        currentY += legendRowHeight;
+                    }
+
+                    legendItemsLayout.push({
+                        color: curve.color,
+                        text: labelText,
+                        x: currentX,
+                        y: currentY
+                    });
+
+                    currentX += itemWidth + legendItemPadding;
+                });
+
+                requiredLegendHeight = currentY + legendRowHeight;
+            } else {
+                 requiredLegendHeight = 30; // default if no curves or no width
+            }
+
+
+            const legendHeight = requiredLegendHeight;
+            const width = availableWidth; // already calculated
+            const height = svgEl.clientHeight - margin.top - margin.bottom - legendHeight;
+            
+            if (visibleCurvesData.length === 0 || height <= 0 || width <= 0) {
+                 svgEl.innerHTML = `<text x="50%" y="50%" fill="#6b7280" text-anchor="middle" dy=".3em">Add or show a curve to begin</text>`;
+                return;
+            }
+           
+            let allPoints = visibleCurvesData.flatMap(c => c.points);
+            if (allPoints.length < 1) {
+                svgEl.innerHTML = `<text x="50%" y="50%" fill="#6b7280" text-anchor="middle" dy=".3em">Not enough data</text>`;
+                return;
+            }
+
+            const fixedAxisToggle = document.getElementById(chartControls.toggleId);
+            const yMinInput = document.getElementById(chartControls.minId);
+            const yMaxInput = document.getElementById(chartControls.maxId);
+            const showLabelsSelect = document.getElementById(chartControls.showLabelsSelectId);
+            const labelMode = showLabelsSelect ? showLabelsSelect.value : 'off';
+            const showLabels = labelMode !== 'off';
+
+            const isFixed = fixedAxisToggle.checked;
+
+            let yMin, yMax;
+
+            if (isFixed) {
+                const userMin = parseFloat(yMinInput.value);
+                const userMax = parseFloat(yMaxInput.value);
+                
+                yMin = isNaN(userMin) ? Math.min(0, ...allPoints.map(p => p[dataKey])) : userMin;
+                yMax = isNaN(userMax) ? Math.max(...allPoints.map(p => p[dataKey])) : userMax;
+
+                if(!isNaN(userMin) && isNaN(userMax)) yMax = Math.max(userMin, yMax);
+                if(isNaN(userMin) && !isNaN(userMax)) yMin = Math.min(userMax, yMin);
+
+                if (yMin >= yMax) yMax = yMin + Math.abs(yMin * 0.1) + 100;
+            } else {
+                yMin = Math.min(0, ...allPoints.map(p => p[dataKey]));
+                yMax = Math.max(...allPoints.map(p => p[dataKey]));
+            }
+
+            const minDate = new Date(Math.min(...allPoints.map(p => p.date)));
+            const maxDate = new Date(Math.max(...allPoints.map(p => p.date)));
+            const yPadding = (yMax - yMin) * 0.1 || 1;
+
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${margin.left},${margin.top})`);
+            svgEl.appendChild(g);
+
+            const x = (d) => width * (d.getTime() - minDate.getTime()) / (maxDate.getTime() - minDate.getTime() || 1);
+            const y = (val) => height - height * (val - (yMin - yPadding)) / ((yMax + yPadding) - (yMin - yPadding) || 1);
+
+            for (let i = 0; i <= 4; i++) {
+                const val = (yMin - yPadding) + i/4 * ((yMax + yPadding) - (yMin - yPadding));
+                const yPos = y(val);
+                let label = val.toLocaleString('en-US', {maximumFractionDigits: 1});
+                 if (Math.abs(val) >= 1e6) label = (val/1e6).toFixed(1) + 'M';
+                 else if (Math.abs(val) >= 1e3) label = (val/1e3).toFixed(1) + 'K';
+                g.innerHTML += `<text x="-10" y="${yPos}" dy="0.32em" text-anchor="end" fill="#9ca3af" font-size="12">${label}${yAxisSuffix}</text><line x1="0" y1="${yPos}" x2="${width}" y2="${yPos}" stroke="#374151" stroke-dasharray="2,2"></line>`;
+            }
+
+            const formatLabel = (val) => {
+                if (yAxisSuffix === '%') return val.toFixed(1) + '%';
+                if (Math.abs(val) >= 1e6) return (val / 1e6).toFixed(1) + 'M';
+                if (Math.abs(val) >= 1e3) return (val / 1e3).toFixed(0) + 'K';
+                return val.toLocaleString('en-US', {maximumFractionDigits: 0});
+            };
+
+            visibleCurvesData.forEach(curve => {
+                if (curve.points.length === 0) return;
+
+                const actualPoints = curve.points.filter(p => p.isActual);
+                const projectedPoints = curve.points.filter(p => !p.isActual);
+
+                if (actualPoints.length > 0 && projectedPoints.length > 0) {
+                    projectedPoints.unshift(actualPoints[actualPoints.length - 1]);
+                }
+
+                if (actualPoints.length > 0) {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', 'M ' + actualPoints.map(d => `${x(d.date)},${y(d[dataKey])}`).join(' L '));
+                    path.setAttribute('fill', 'none'); path.setAttribute('stroke', curve.color); path.setAttribute('stroke-width', '2');
+                    g.appendChild(path);
+                }
+
+                if (projectedPoints.length > 0) {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', 'M ' + projectedPoints.map(d => `${x(d.date)},${y(d[dataKey])}`).join(' L '));
+                    path.setAttribute('fill', 'none'); path.setAttribute('stroke', curve.color); path.setAttribute('stroke-width', '2');
+                    path.setAttribute('stroke-dasharray', '5,5');
+                    g.appendChild(path);
+                }
+                 
+                curve.points.forEach(d => {
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', x(d.date)); circle.setAttribute('cy', y(d[dataKey]));
+                    circle.setAttribute('r', 2); circle.setAttribute('fill', curve.color);
+                    g.appendChild(circle);
+                });
+            });
+
+            if (showLabels) {
+                const labelData = [];
+                const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+                const periodLabelToggle = document.getElementById(chartControls.periodLabelToggleId);
+                const showPeriodLabels = periodLabelToggle ? periodLabelToggle.checked : false;
+
+                const valueLabelHeight = 12; 
+                const periodLabelHeight = showPeriodLabels ? 10 : 0;
+                const labelVerticalGap = 2;
+                const totalLabelHeight = valueLabelHeight + periodLabelHeight + labelVerticalGap; 
+
+                visibleCurvesData.forEach(curve => {
+                    let pointsToShowLabels = [];
+                    const nthInput = document.getElementById(chartControls.labelNthInputId);
+                    const nthValue = nthInput ? (parseInt(nthInput.value) || 1) : 1;
+                    
+                    if (labelMode === 'all') {
+                        pointsToShowLabels = curve.points;
+                    } else if (labelMode === 'nth') {
+                        pointsToShowLabels = curve.points.filter((p, i) => i % nthValue === 0);
+                    } else {
+                        pointsToShowLabels = curve.points.filter(p => {
+                            const date = p.date;
+                            const month = date.getUTCMonth(); // 0-11
+                            if (labelMode === 'eoq') {
+                                return timePeriod === 'annually' || [2, 5, 8, 11].includes(month);
+                            }
+                            if (labelMode === 'eohy') {
+                                return timePeriod !== 'annually' && month === 5; // June
+                            }
+                            if (labelMode === 'eoy') {
+                                return timePeriod === 'annually' || month === 11; // December
+                            }
+                            return false;
+                        });
+                    }
+
+                    pointsToShowLabels.forEach(d => {
+                        labelData.push({
+                            x: x(d.date),
+                            y: y(d[dataKey]) - 8,
+                            valueText: formatLabel(d[dataKey]),
+                            periodText: showPeriodLabels ? formatPeriodLabelForChart(d, timePeriod) : null,
+                            color: '#d1d5db'
+                        });
+                    });
+                });
+
+                const labelsByX = labelData.reduce((acc, label) => {
+                    const key = Math.round(label.x / 5) * 5;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(label);
+                    return acc;
+                }, {});
+
+                const finalLabelsG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.appendChild(finalLabelsG);
+
+                Object.values(labelsByX).forEach(group => {
+                    group.sort((a, b) => a.y - b.y);
+
+                    for (let i = 1; i < group.length; i++) {
+                        const prevLabel = group[i - 1];
+                        const currentLabel = group[i];
+                        if (currentLabel.y < prevLabel.y + totalLabelHeight) {
+                            currentLabel.y = prevLabel.y + totalLabelHeight;
+                        }
+                    }
+
+                    group.forEach(label => {
+                        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        text.setAttribute('x', String(label.x));
+                        text.setAttribute('y', String(label.y));
+                        text.setAttribute('text-anchor', 'middle');
+
+                        if (label.periodText) {
+                            const periodTspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                            periodTspan.textContent = label.periodText;
+                            periodTspan.setAttribute('x', String(label.x));
+                            periodTspan.setAttribute('font-size', '9');
+                            
+                            const valueTspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                            valueTspan.textContent = label.valueText;
+                            valueTspan.setAttribute('x', String(label.x));
+                            valueTspan.setAttribute('dy', '1.2em');
+                            valueTspan.setAttribute('font-size', '10');
+
+                            text.appendChild(periodTspan);
+                            text.appendChild(valueTspan);
+                        } else {
+                            text.textContent = label.valueText;
+                            text.setAttribute('font-size', '10');
+                        }
+                        
+                        const bgText = text.cloneNode(true);
+                        bgText.setAttribute('stroke', '#1f2937');
+                        bgText.setAttribute('stroke-width', '4');
+                        bgText.setAttribute('stroke-linejoin', 'round');
+                        
+                        text.setAttribute('fill', label.color);
+                         if (label.periodText) {
+                            text.childNodes[0].setAttribute('fill', '#9ca3af');
+                            text.childNodes[1].setAttribute('fill', label.color);
+                        }
+
+                        finalLabelsG.appendChild(bgText);
+                        finalLabelsG.appendChild(text);
+                    });
+                });
+            }
+            
+            const legendG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            legendG.setAttribute('transform', `translate(0, ${height + margin.bottom})`);
+            
+            legendItemsLayout.forEach(itemData => {
+                const item = document.createElementNS('http://www.w3.org/2000/svg','g');
+                item.setAttribute('transform', `translate(${itemData.x}, ${itemData.y})`);
+                item.innerHTML = `<rect x="0" y="0" width="12" height="12" fill="${itemData.color}" rx="2"></rect><text x="18" y="10" fill="#9ca3af" font-size="12">${itemData.text}</text>`;
+                legendG.appendChild(item);
+            });
+            g.appendChild(legendG);
+
+            const tooltipLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            tooltipLine.setAttribute('y1', 0); tooltipLine.setAttribute('y2', height);
+            tooltipLine.setAttribute('stroke', '#9ca3af'); tooltipLine.setAttribute('stroke-width', '1');
+            tooltipLine.setAttribute('stroke-dasharray', '4,4'); tooltipLine.style.opacity = 0;
+            g.appendChild(tooltipLine);
+
+            const tooltipCircles = allCurvesDataCache.map(curve => { // Use all curves for circles so indices match
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('r', 4); circle.setAttribute('fill', 'white'); circle.setAttribute('stroke', curve.color);
+                circle.setAttribute('stroke-width', 2); circle.style.opacity = 0;
+                g.appendChild(circle);
+                return circle;
+            });
+            
+            const eventRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            eventRect.setAttribute('width', width); eventRect.setAttribute('height', height);
+            eventRect.setAttribute('fill', 'none'); eventRect.setAttribute('pointer-events', 'all');
+            g.appendChild(eventRect);
+            
+            let isDragging = false;
+
+            // --- Drag to Select Logic ---
+            if (dataKey === 'compoundedValue' && masterPeriodsCache.length > 0) {
+                let startPeriod = null;
+                const selectionRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                selectionRect.setAttribute('fill', 'rgba(96, 165, 250, 0.3)');
+                selectionRect.setAttribute('stroke', '#60a5fa');
+                selectionRect.setAttribute('stroke-width', '1');
+                selectionRect.style.display = 'none';
+                g.appendChild(selectionRect);
+                
+                const selectionLineGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.appendChild(selectionLineGroup);
+
+                const infoBox = document.getElementById('value-chart-selection-info');
+
+                const findClosestPeriod = (pixelX) => {
+                    let closest = null;
+                    let minDistance = Infinity;
+                    masterPeriodsCache.forEach(p => {
+                        const dist = Math.abs(x(p.date) - pixelX);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            closest = p;
+                        }
+                    });
+                    return closest;
+                };
+
+                eventRect.addEventListener('mousedown', (e) => {
+                    const rect = eventRect.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    startPeriod = findClosestPeriod(mouseX);
+                    if (!startPeriod) return;
+
+                    isDragging = true;
+                    selectionRect.setAttribute('x', x(startPeriod.date));
+                    selectionRect.setAttribute('y', 0);
+                    selectionRect.setAttribute('width', 0);
+                    selectionRect.setAttribute('height', height);
+                    selectionRect.style.display = 'block';
+                    
+                    infoBox.innerHTML = '';
+                    selectionLineGroup.innerHTML = '';
+                    e.preventDefault();
+                });
+
+                eventRect.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    const rect = eventRect.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const currentPeriod = findClosestPeriod(mouseX);
+                    if (!currentPeriod) return;
+
+                    const startX = x(startPeriod.date);
+                    const currentX = x(currentPeriod.date);
+
+                    const selectionStartPx = Math.min(startX, currentX);
+                    const selectionWidth = Math.abs(currentX - startX);
+                    
+                    selectionRect.setAttribute('x', selectionStartPx);
+                    selectionRect.setAttribute('width', selectionWidth);
+                });
+
+                window.addEventListener('mouseup', (e) => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    
+                    const rect = eventRect.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    let endPeriod = findClosestPeriod(mouseX);
+                    if (!endPeriod || !startPeriod) return;
+
+                    if (startPeriod.date.getTime() > endPeriod.date.getTime()) {
+                        [startPeriod, endPeriod] = [endPeriod, startPeriod];
+                    }
+
+                    if (startPeriod.date.getTime() === endPeriod.date.getTime()) {
+                        selectionRect.style.display = 'none';
+                        infoBox.innerHTML = '';
+                        return;
+                    }
+                    
+                    const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+                    const years = (endPeriod.date.getTime() - startPeriod.date.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+                    if (years <= 0) return;
+
+                    let resultsHTML = `<span class="font-semibold">Selected Period Growth:</span><div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">`;
+                    
+                    allCurvesDataCache.filter(c => c.isVisible).forEach(curve => {
+                        const startPoint = findPointForPeriod(curve.points, startPeriod, timePeriod);
+                        const endPoint = findPointForPeriod(curve.points, endPeriod, timePeriod);
+                        
+                        let cagr = 0, averageGrowth = 0;
+
+                        if (startPoint && endPoint) {
+                            // Draw average line
+                            const avgLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            avgLine.setAttribute('x1', x(startPoint.date));
+                            avgLine.setAttribute('y1', y(startPoint.compoundedValue));
+                            avgLine.setAttribute('x2', x(endPoint.date));
+                            avgLine.setAttribute('y2', y(endPoint.compoundedValue));
+                            avgLine.setAttribute('stroke', curve.color);
+                            avgLine.setAttribute('stroke-width', '2');
+                            avgLine.setAttribute('stroke-dasharray', '2,4');
+                            selectionLineGroup.appendChild(avgLine);
+
+                            if (startPoint.compoundedValue > 0 && endPoint.compoundedValue > 0) {
+                                // CAGR calculation
+                                cagr = (Math.pow(endPoint.compoundedValue / startPoint.compoundedValue, 1 / years) - 1) * 100;
+                                
+                                // Average periodic growth calculation
+                                let totalPeriodicGrowth = 0;
+                                let periodCount = 0;
+                                const startIndex = masterPeriodsCache.indexOf(startPeriod);
+                                const endIndex = masterPeriodsCache.indexOf(endPeriod);
+                                
+                                if (endIndex > startIndex) {
+                                    for (let i = startIndex + 1; i <= endIndex; i++) {
+                                        const prevP = masterPeriodsCache[i-1];
+                                        const currP = masterPeriodsCache[i];
+                                        const prevPoint = findPointForPeriod(curve.points, prevP, timePeriod);
+                                        const currPoint = findPointForPeriod(curve.points, currP, timePeriod);
+                                        if (prevPoint && currPoint && prevPoint.compoundedValue > 0) {
+                                            totalPeriodicGrowth += (currPoint.compoundedValue / prevPoint.compoundedValue) - 1;
+                                            periodCount++;
+                                        }
+                                    }
+                                    if (periodCount > 0) {
+                                        averageGrowth = (totalPeriodicGrowth / periodCount) * 100;
+                                    }
+                                }
+                                resultsHTML += `<div class="flex items-center">
+                                    <span class="w-2 h-2 rounded-full mr-1.5" style="background-color:${curve.color}"></span> ${curve.name}: 
+                                    <span class="font-semibold ml-1.5">${averageGrowth.toFixed(2)}%</span><span class="text-gray-500 ml-1">Avg</span>
+                                    <span class="font-semibold ml-3">${cagr.toFixed(2)}%</span><span class="text-gray-500 ml-1">CAGR</span>
+                                </div>`;
+                            }
+                        }
+                    });
+                    resultsHTML += `</div>`;
+                    infoBox.innerHTML = resultsHTML;
+                });
+            }
+
+
+            eventRect.addEventListener('mousemove', (e) => {
+                if (isDragging || masterPeriodsCache.length === 0) return;
+                const rect = eventRect.getBoundingClientRect(); const mouseX = e.clientX - rect.left;
+                
+                let closestPointIndex = 0;
+                let minDistance = Infinity;
+                masterPeriodsCache.forEach((period, i) => {
+                    const pointX = x(period.date);
+                    const distance = Math.abs(mouseX - pointX);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestPointIndex = i;
+                    }
+                });
+                
+                const period = masterPeriodsCache[closestPointIndex];
+                if (!period) return;
+
+                const timePeriod = document.querySelector('input[name="time-period"]:checked').value;
+                const periodDate = period.date; const xPos = x(periodDate);
+                tooltipLine.setAttribute('x1', xPos); tooltipLine.setAttribute('x2', xPos);
+                tooltipLine.style.opacity = 1;
+
+                let tooltipDateLabel = '';
+                if (timePeriod === 'monthly') tooltipDateLabel = periodDate.toLocaleDateString('en-us', {timeZone: 'UTC', month:'long', year:'numeric'});
+                else if (timePeriod === 'quarterly') tooltipDateLabel = `Q${period.quarter} ${period.year}`;
+                else tooltipDateLabel = `FY ${period.year}`;
+
+                let tooltipHTML = `<div class="font-bold mb-2">${tooltipDateLabel}</div>`;
+                
+                allCurvesDataCache.forEach((curve, i) => {
+                    if (!curve.isVisible) {
+                        tooltipCircles[i].style.opacity = 0;
+                        return;
+                    }
+                    const point = findPointForPeriod(curve.points, period, timePeriod);
+                    if (point) {
+                        tooltipCircles[i].setAttribute('cx', xPos); tooltipCircles[i].setAttribute('cy', y(point[dataKey]));
+                        tooltipCircles[i].style.opacity = 1;
+                        const typeLabel = point.isActual ? '(A)' : '(P)';
+                        tooltipHTML += `<div class="grid grid-cols-3 gap-x-2 items-center">
+                            <div class="flex items-center col-span-1"><span class="w-3 h-3 rounded-full mr-2" style="background-color:${curve.color}"></span></div>
+                            <div class="text-right font-mono">${point.compoundedValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                            <div class="text-right text-gray-400">${point.value.toFixed(2)}% ${typeLabel}</div>
+                        </div>`;
+                    } else { tooltipCircles[i].style.opacity = 0; }
+                });
+                tooltipEl.innerHTML = tooltipHTML; tooltipEl.style.opacity = 1;
+                const tooltipRect = tooltipEl.getBoundingClientRect();
+                const containerRect = svgEl.parentElement.getBoundingClientRect();
+                let left = e.clientX - containerRect.left - tooltipRect.width - 20;
+                if (left < 0) left = e.clientX - containerRect.left + 20;
+                let top = (e.clientY - containerRect.top + 20);
+                 if (top + tooltipRect.height > containerRect.height) top = e.clientY - containerRect.top - tooltipRect.height - 20;
+                tooltipEl.style.transform = `translate(${left}px, ${top}px)`;
+            });
+
+            eventRect.addEventListener('mouseleave', () => {
+                if (isDragging) return;
+                tooltipEl.style.opacity = 0;
+                tooltipLine.style.opacity = 0;
+                tooltipCircles.forEach(c => c.style.opacity = 0);
+            });
+        }
+
+        // --- INITIALIZATION ---
+        addCurve(true);
+        generateAllCurves();
+        new ResizeObserver(generateAllCurves).observe(percentChartContainer);
+        new ResizeObserver(generateAllCurves).observe(valueChartContainer);
+    });
+    </script>
+</body>
+</html>
